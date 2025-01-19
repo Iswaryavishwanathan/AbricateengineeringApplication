@@ -1,5 +1,8 @@
 package com.example.abricateengineering.entity;
 import java.time.LocalDateTime;
+
+import com.example.abricateengineering.DAO.DataRecordDAO;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -8,9 +11,9 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "LOG", schema = "dbo")
 
-public class DataRecord {
+public class DataRecord extends DataRecordDAO{
     @Id
-    @Column(name = "DateTime", nullable = false)
+    @Column(name = "DateTime")
     private LocalDateTime dateTime;
 
     @Column(name = "FORMULA")

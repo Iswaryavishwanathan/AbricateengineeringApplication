@@ -5,18 +5,14 @@ import com.example.abricateengineering.DAO.DataRecordDAO;
 import com.example.abricateengineering.DAO.MaterialReport;
 import com.example.abricateengineering.DAO.RecipeConsompsion;
 import com.example.abricateengineering.Repository.DataRecordRepository;
-
-import java.time.format.DateTimeParseException;
+import com.example.abricateengineering.entity.DataRecord;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
+
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
+
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -85,68 +81,104 @@ public class DataRecordService {
                 .findFirst()
                 .orElse(-1);
     }
-    public Map<String, Object> getFormattedData(String startDateStr, String endDateStr) {
-        LocalDateTime startDateTime = parseDateTime(startDateStr);
-        LocalDateTime endDateTime = parseDateTime(endDateStr);
-    
-        // Fetch data records from the database
-        List<DataRecordDAO> dataRecordDAOs = dataRecordRepository.findAllByDateTimeBetween(startDateTime, endDateTime).stream()
-                .map(dataDAOService::convertToDAO)
-                .collect(Collectors.toList());
-    
-        // Prepare the result
-        Map<String, Object> result = new HashMap<>();
-        Set<String> columnNames = new HashSet<>();
-    
-        for (DataRecordDAO record : dataRecordDAOs) {
-            // Add material names to the column set
-            Collections.addAll(columnNames, record.getNValues());
-        }
-        result.put("ColumnName", new ArrayList<>(columnNames));
-    
-        List<Map<String, Object>> dataRows = new ArrayList<>();
-        for (DataRecordDAO record : dataRecordDAOs) {
-            // Use the exact dateTime from the database
-            Map<String, Object> rowData = new HashMap<>();
-            rowData.put("dateTime", record.getDateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-            rowData.put("rowType", record.getRowType());
-    
-            List<Integer> values = new ArrayList<>();
-            for (String materialName : columnNames) {
-                int index = findMaterialIndex(record.getNValues(), materialName);
-                if (index >= 0) {
-                    int setWeight = record.getTValues()[index];
-                    int achWeight = record.getAValues()[index];
-                    values.add(setWeight);
-                    values.add(achWeight);
-                } else {
-                    values.add(0); // Default value for missing materials
+    public List<DataRecordDAO> getFormattedData(String startDateStr, String endDateStr) {
+        // Define the DateTimeFormatter based on the date string format (yyyy-MM-dd)
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        // Convert the String parameters to LocalDate objects
+        LocalDate startDate = LocalDate.parse(startDateStr, dateFormatter);
+        LocalDate endDate = LocalDate.parse(endDateStr, dateFormatter);
+        // Convert LocalDate to LocalDateTime (start of the day)
+        LocalDateTime startDateTime = startDate.atStartOfDay();
+        LocalDateTime endDateTime = endDate.atStartOfDay();
+        // Fetch the records from the repository based on the date range
+        List<DataRecord> originalRecords = dataRecordRepository.findAllByDateTimeBetween(startDateTime, endDateTime);
+        // Initialize the list to hold formatted DataRecordDAO results
+        List<DataRecordDAO> formattedRecords = new ArrayList<>();
+        // Iterate through the records and format them as needed
+        for (DataRecord record : originalRecords) {
+            LocalDateTime dateTime = record.getDateTime();
+            String[] materialName = record.getNValues();
+            Integer[] setWeight = record.getTValues();
+            Integer[] achWeight = record.getAValues();
+            // Track previous setWeight for each material
+            Integer[] previousSetWeights = new Integer[materialName.length];
+            for (int i = 0; i < materialName.length; i++) {
+                if (materialName[i] != null) {
+                    // Compare current setWeight with the previous one
+                    if (previousSetWeights[i] == null || !previousSetWeights[i].equals(setWeight[i])) {
+                        // Create a DataRecordDAO for setWeight when it changes
+                        DataRecordDAO setWeightRecord = new DataRecordDAO();
+                        setWeightRecord.setDateTime(dateTime);
+                        setWeightRecord.setRowType("setWeight");
+                        setWeightRecord.setNValues(new String[]{materialName[i]});
+                        setWeightRecord.setTValues(new Integer[]{setWeight[i]});
+                        setWeightRecord.setAValues(new Integer[]{0}); // No achieved weight for setWeight
+                        formattedRecords.add(setWeightRecord);
+                        // Update previous setWeight
+                        previousSetWeights[i] = setWeight[i];
+                    }
+                    // Create a DataRecordDAO for achievedWeight
+                    DataRecordDAO achWeightRecord = new DataRecordDAO();
+                    achWeightRecord.setDateTime(dateTime);
+                    achWeightRecord.setRowType("achWeight");
+                    achWeightRecord.setNValues(new String[]{materialName[i]});
+                    achWeightRecord.setTValues(new Integer[]{0}); // No set weight for achievedWeight
+                    achWeightRecord.setAValues(new Integer[]{achWeight[i]});
+                    formattedRecords.add(achWeightRecord);
                 }
             }
-    
-            rowData.put("values", values);
-            dataRows.add(rowData);
         }
-    
-        result.put("data", dataRows);
-        return result;
+        return formattedRecords;
     }
-    
-    private LocalDateTime parseDateTime(String dateStr) {
-        try {
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-            return LocalDate.parse(dateStr, dateFormatter).atStartOfDay();
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("Invalid date format. Expected yyyy-MM-dd", e);
-        }
-    }
+    // Method to get formatted data
+    // public List<DataRecordDAO> getFormattedData(String startDateStr, String endDateStr) {
+    //     // Define the DateTimeFormatter based on the date string format (yyyy-MM-dd)
+    //     DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    //     // Convert the String parameters to LocalDate objects
+    //     LocalDate startDate = LocalDate.parse(startDateStr, dateFormatter);
+    //     LocalDate endDate = LocalDate.parse(endDateStr, dateFormatter);
+    //     // Convert LocalDate to LocalDateTime (start of the day)
+    //     LocalDateTime startDateTime = startDate.atStartOfDay();
+    //     LocalDateTime endDateTime = endDate.atStartOfDay();
+        
+    //     // Fetch the records from the repository based on the date range
+    //     List<DataRecord> originalRecords = dataRecordRepository.findAllByDateTimeBetween(startDateTime, endDateTime);
+        
+    //     // Initialize the list to hold formatted DataRecordDAO results
+    //     List<DataRecordDAO> formattedRecords = new ArrayList<>();
+        
+    //     // Track previous setWeight for each material
+    //     Integer[] previousSetWeights = new Integer[0];
 
-    private int findMaterialIndex(String[] materialArray, String materialName) {
-        for (int i = 0; i < materialArray.length; i++) {
-            if (materialArray[i] != null && materialArray[i].equals(materialName)) {
-                return i;
-            }
-        }
-        return -1;
-    }
+    //     // Iterate through the records and format them as needed
+    //     for (DataRecord record : originalRecords) {
+    //         LocalDateTime dateTime = record.getDateTime();
+    //         String[] materialName = record.getNValues();
+    //         Integer[] setWeight = record.getTValues();
+    //         Integer[] achWeight = record.getAValues();
+
+    //         for (int i = 0; i < materialName.length; i++) {
+    //             if (materialName[i] != null) {
+    //                 // Compare current setWeight with the previous one
+    //                 if (previousSetWeights[i] == null || !previousSetWeights[i].equals(setWeight[i])) {
+    //                     // Create a DataRecordDAO for setWeight when it changes
+    //                     DataRecordDAO setWeightRecord = new DataRecordDAO(
+    //                         dateTime, "setWeight", new String[]{materialName[i]}, new Integer[]{setWeight[i]}, new Integer[]{0}
+    //                     );
+    //                     formattedRecords.add(setWeightRecord);
+                        
+    //                     // Update previous setWeight
+    //                     previousSetWeights[i] = setWeight[i];
+    //                 }
+
+    //                 // Create a DataRecordDAO for achievedWeight
+    //                 DataRecordDAO achWeightRecord = new DataRecordDAO(
+    //                     dateTime, "achWeight", new String[]{materialName[i]}, new Integer[]{0}, new Integer[]{achWeight[i]}
+    //                 );
+    //                 formattedRecords.add(achWeightRecord);
+    //             }
+    //         }
+    //     }
+    //     return formattedRecords;
+    // }
 }

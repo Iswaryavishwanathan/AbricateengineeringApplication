@@ -4,9 +4,6 @@ public class MaterialReport {
     private String materialName;
     private int setWeight;
     private int achWeight;
-
-
-    
     public MaterialReport(String materialName, int setWeight, int achWeight) {
         this.materialName = materialName;
         this.setWeight = setWeight;
